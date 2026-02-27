@@ -20,12 +20,10 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: npm
-          cache-dependency-path: worker/package-lock.json
 
       - name: Install dependencies
         working-directory: worker
-        run: npm ci
+        run: npm install --no-audit --no-fund
 
       - name: Typecheck
         working-directory: worker
