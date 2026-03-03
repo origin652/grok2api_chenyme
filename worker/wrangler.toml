@@ -24,19 +24,8 @@ new_sqlite_classes = ["AutoRegisterJob"]
 tag = "do-v2"
 deleted_classes = ["AutoRegisterJob"]
 
-[vars]
-# Daily reset at local midnight (default: Asia/Shanghai, UTC+8).
-# Make sure the cron below matches this offset.
-CACHE_RESET_TZ_OFFSET_MINUTES = "480"
-
-# Build info (CI will inject commit SHA into wrangler.ci.toml)
-BUILD_SHA = "dev"
-
-# Workers KV has per-value limits; keep <= 25MB.
-KV_CACHE_MAX_BYTES = "26214400"
-
-# Batch size for the daily cleanup job (deleting KV keys + D1 rows).
-KV_CLEANUP_BATCH = "200"
+# NOTE: vars are environment-scoped when using `--env`.
+# Keep shared defaults duplicated under env.a.vars / env.b.vars.
 
 [env.a]
 name = "grok2api-a"
@@ -50,6 +39,20 @@ migrations_dir = "src/migrations"
 [[env.a.kv_namespaces]]
 binding = "KV_CACHE"
 id = "REPLACE_WITH_KV_NAMESPACE_ID_A"
+
+[env.a.vars]
+# Daily reset at local midnight (default: Asia/Shanghai, UTC+8).
+# Make sure the cron below matches this offset.
+CACHE_RESET_TZ_OFFSET_MINUTES = "480"
+
+# Build info (CI will inject commit SHA in workflow if needed)
+BUILD_SHA = "dev"
+
+# Workers KV has per-value limits; keep <= 25MB.
+KV_CACHE_MAX_BYTES = "26214400"
+
+# Batch size for the daily cleanup job (deleting KV keys + D1 rows).
+KV_CLEANUP_BATCH = "200"
 
 [env.a.triggers]
 # Every day at 00:00 (Asia/Shanghai => 16:00 UTC)
@@ -67,6 +70,13 @@ migrations_dir = "src/migrations"
 [[env.b.kv_namespaces]]
 binding = "KV_CACHE"
 id = "REPLACE_WITH_KV_NAMESPACE_ID_B"
+
+[env.b.vars]
+# Keep same runtime defaults unless you intentionally diverge.
+CACHE_RESET_TZ_OFFSET_MINUTES = "480"
+BUILD_SHA = "dev"
+KV_CACHE_MAX_BYTES = "26214400"
+KV_CLEANUP_BATCH = "200"
 
 # Keep B without cron by default to avoid duplicated daily cleanup jobs.
 # [env.b.triggers]
