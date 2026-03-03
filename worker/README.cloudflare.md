@@ -144,14 +144,41 @@ python scripts/smoke_test.py --base-url https://<你的域名或workers.dev>
 
 ---
 
-## 5.1) GitHub Actions 一键部署（推荐）
+## 5.1) GitHub Actions 一键部署（硬隔离：A/B）
 
-仓库已包含工作流：`.github/workflows/cloudflare-workers.yml`，在 `main` 分支 push 时会自动：
+仓库工作流：`.github/workflows/cloudflare-workers.yml`
 
-1. `cd worker && npm ci && npm run typecheck`
-2. 自动创建/复用 D1 + KV，并生成 `wrangler.ci.toml`
-3. `cd worker && wrangler d1 migrations apply DB --remote --config wrangler.ci.toml`
-4. `cd worker && wrangler deploy`
+- `push main`：默认部署 `env.a`
+- `workflow_dispatch`：可手动选择 `target = a | b`
+
+### 需要配置的 GitHub Secrets
+
+- `CLOUDFLARE_API_TOKEN_A`
+- `CLOUDFLARE_ACCOUNT_ID_A`
+- `CLOUDFLARE_API_TOKEN_B`
+- `CLOUDFLARE_ACCOUNT_ID_B`
+
+> A/B 可以是不同 Cloudflare 账号，实现硬隔离。
+
+### wrangler 绑定要求
+
+请在 `worker/wrangler.toml` 填好（或后续手动替换）4 个 ID：
+
+- `REPLACE_WITH_D1_DATABASE_ID_A`
+- `REPLACE_WITH_KV_NAMESPACE_ID_A`
+- `REPLACE_WITH_D1_DATABASE_ID_B`
+- `REPLACE_WITH_KV_NAMESPACE_ID_B`
+
+### 部署步骤（命令行手动）
+
+```bash
+cd worker
+npx wrangler d1 migrations apply DB --remote --env a
+npx wrangler deploy --env a
+
+npx wrangler d1 migrations apply DB --remote --env b
+npx wrangler deploy --env b
+```
 
 ### 仓库级部署自检（建议）
 

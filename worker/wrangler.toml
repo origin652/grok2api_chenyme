@@ -10,17 +10,8 @@ assets = { directory = "./static", binding = "ASSETS" }
 [placement]
 region = "aws:us-east-1"
 
-[[d1_databases]]
-binding = "DB"
-database_name = "grok2api"
-# Filled by CI / your first deployment bootstrap.
-database_id = "REPLACE_WITH_D1_DATABASE_ID"
-migrations_dir = "src/migrations"
-
-[[kv_namespaces]]
-binding = "KV_CACHE"
-# Filled by CI / your first deployment bootstrap.
-id = "REPLACE_WITH_KV_NAMESPACE_ID"
+# Root-level bindings intentionally omitted.
+# Use env.a / env.b for hard isolation (separate D1/KV/account).
 
 # Durable Objects migrations history:
 # - do-v1 created AutoRegisterJob (now removed)
@@ -47,6 +38,36 @@ KV_CACHE_MAX_BYTES = "26214400"
 # Batch size for the daily cleanup job (deleting KV keys + D1 rows).
 KV_CLEANUP_BATCH = "200"
 
-[triggers]
+[env.a]
+name = "grok2api-a"
+
+[[env.a.d1_databases]]
+binding = "DB"
+database_name = "grok2api_a"
+database_id = "REPLACE_WITH_D1_DATABASE_ID_A"
+migrations_dir = "src/migrations"
+
+[[env.a.kv_namespaces]]
+binding = "KV_CACHE"
+id = "REPLACE_WITH_KV_NAMESPACE_ID_A"
+
+[env.a.triggers]
 # Every day at 00:00 (Asia/Shanghai => 16:00 UTC)
 crons = ["0 16 * * *"]
+
+[env.b]
+name = "grok2api-b"
+
+[[env.b.d1_databases]]
+binding = "DB"
+database_name = "grok2api_b"
+database_id = "REPLACE_WITH_D1_DATABASE_ID_B"
+migrations_dir = "src/migrations"
+
+[[env.b.kv_namespaces]]
+binding = "KV_CACHE"
+id = "REPLACE_WITH_KV_NAMESPACE_ID_B"
+
+# Keep B without cron by default to avoid duplicated daily cleanup jobs.
+# [env.b.triggers]
+# crons = ["0 16 * * *"]
