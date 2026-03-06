@@ -34,6 +34,7 @@ from app.core.exceptions import register_exception_handlers  # noqa: E402
 from app.core.response_middleware import ResponseLoggerMiddleware  # noqa: E402
 from app.api.v1.chat import router as chat_router  # noqa: E402
 from app.api.v1.image import router as image_router  # noqa: E402
+from app.api.v1.video import router as video_router  # noqa: E402
 from app.api.v1.files import router as files_router  # noqa: E402
 from app.api.v1.models import router as models_router  # noqa: E402
 from app.api.v1.response import router as responses_router  # noqa: E402
@@ -145,6 +146,9 @@ def create_app() -> FastAPI:
     app.include_router(
         responses_router, prefix="/v1", dependencies=[Depends(verify_api_key)]
     )
+    app.include_router(
+        video_router, prefix="/v1", dependencies=[Depends(verify_api_key)]
+    )
     app.include_router(files_router, prefix="/v1/files")
 
     # 静态文件服务
@@ -172,27 +176,17 @@ app = create_app()
 
 
 if __name__ == "__main__":
-    import uvicorn
-
     host = os.getenv("SERVER_HOST", "0.0.0.0")
     port = int(os.getenv("SERVER_PORT", "8000"))
     workers = int(os.getenv("SERVER_WORKERS", "1"))
-
-    # 平台检查
-    is_windows = platform.system() == "Windows"
-
-    # 自动降级
-    if is_windows and workers > 1:
-        logger.warning(
-            f"Windows platform detected. Multiple workers ({workers}) is not supported. "
-            "Using single worker instead."
-        )
-        workers = 1
-
-    uvicorn.run(
-        "main:app",
-        host=host,
-        port=port,
-        workers=workers,
-        log_level=os.getenv("LOG_LEVEL", "INFO").lower(),
+    log_level = os.getenv("LOG_LEVEL", "INFO").lower()
+    logger.error(
+        "Direct startup via `python main.py` is disabled. "
+        "Please run with Granian CLI to avoid Python wrapper issues."
     )
+    logger.error(
+        "Use: uv run granian --interface asgi "
+        f"--host {host} --port {port} --workers {workers} "
+        f"--log-level {log_level} main:app"
+    )
+    raise SystemExit(1)
