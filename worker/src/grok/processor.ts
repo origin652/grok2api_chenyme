@@ -1,4 +1,5 @@
 import type { GrokSettings, GlobalSettings } from "../settings";
+import { parseToolCalls, type OpenAIToolDefinition } from "./toolCall";
 
 type GrokNdjson = Record<string, unknown>;
 
@@ -122,6 +123,7 @@ export function createOpenAiStreamFromGrokNdjson(
     global: GlobalSettings;
     origin: string;
     requestedModel: string;
+    tools?: OpenAIToolDefinition[];
     onFinish?: (result: { status: number; duration: number }) => Promise<void> | void;
   },
 ): ReadableStream<Uint8Array> {
@@ -409,7 +411,14 @@ export function createOpenAiStreamFromGrokNdjson(
 
 export async function parseOpenAiFromGrokNdjson(
   grokResp: Response,
-  opts: { cookie: string; settings: GrokSettings; global: GlobalSettings; origin: string; requestedModel: string },
+  opts: {
+    cookie: string;
+    settings: GrokSettings;
+    global: GlobalSettings;
+    origin: string;
+    requestedModel: string;
+    tools?: OpenAIToolDefinition[];
+  },
 ): Promise<Record<string, unknown>> {
   const { global, origin, requestedModel, settings } = opts;
   const text = await grokResp.text();
@@ -476,6 +485,16 @@ export async function parseOpenAiFromGrokNdjson(
     break;
   }
 
+  const parsed = parseToolCalls(content, opts.tools);
+  const hasToolCalls = Array.isArray(parsed.toolCalls) && parsed.toolCalls.length > 0;
+  const message: Record<string, unknown> = { role: "assistant" };
+  if (hasToolCalls) {
+    message.content = parsed.textContent ?? null;
+    message.tool_calls = parsed.toolCalls;
+  } else {
+    message.content = content;
+  }
+
   return {
     id: `chatcmpl-${crypto.randomUUID()}`,
     object: "chat.completion",
@@ -484,8 +503,8 @@ export async function parseOpenAiFromGrokNdjson(
     choices: [
       {
         index: 0,
-        message: { role: "assistant", content },
-        finish_reason: "stop",
+        message,
+        finish_reason: hasToolCalls ? "tool_calls" : "stop",
       },
     ],
     usage: null,

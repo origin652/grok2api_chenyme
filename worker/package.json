@@ -6,7 +6,8 @@
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
     "db:migrate": "wrangler d1 migrations apply DB --remote",
-    "typecheck": "tsc -p tsconfig.json --noEmit"
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "check:upstream-drift": "node scripts/check-upstream-drift.mjs"
   },
   "dependencies": {
     "hono": "^4.6.16"

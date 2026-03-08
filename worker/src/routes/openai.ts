@@ -6,6 +6,7 @@ import { getSettings, normalizeCfCookie } from "../settings";
 import { isValidModel, MODEL_CONFIG } from "../grok/models";
 import { extractContent, buildConversationPayload, sendConversationRequest } from "../grok/conversation";
 import { uploadImage } from "../grok/upload";
+import { buildToolPrompt, formatToolHistory, type OpenAIToolDefinition } from "../grok/toolCall";
 import { getDynamicHeaders } from "../grok/headers";
 import { createMediaPost, createPost } from "../grok/create";
 import { createOpenAiStreamFromGrokNdjson, parseOpenAiFromGrokNdjson } from "../grok/processor";
@@ -1199,6 +1200,9 @@ openAiRoutes.post("/chat/completions", async (c) => {
       model?: string;
       messages?: any[];
       stream?: boolean;
+      tools?: OpenAIToolDefinition[];
+      tool_choice?: unknown;
+      parallel_tool_calls?: boolean;
       video_config?: {
         aspect_ratio?: string;
         video_length?: number;
@@ -1220,7 +1224,7 @@ openAiRoutes.post("/chat/completions", async (c) => {
       ? settingsBundle.grok.retry_status_codes
       : [401, 429];
 
-    const stream = Boolean(body.stream);
+    const stream = Boolean(body.stream) && !(Array.isArray(body.tools) && body.tools.length > 0);
     const maxRetry = 3;
     let lastErr: string | null = null;
 
@@ -1247,7 +1251,11 @@ openAiRoutes.post("/chat/completions", async (c) => {
       const cf = normalizeCfCookie(settingsBundle.grok.cf_clearance ?? "");
       const cookie = cf ? `sso-rw=${jwt};sso=${jwt};${cf}` : `sso-rw=${jwt};sso=${jwt}`;
 
-      const { content, images } = extractContent(body.messages as any);
+      const toolDefinitions = Array.isArray(body.tools) ? body.tools : [];
+      const toolPrompt = buildToolPrompt(toolDefinitions, body.tool_choice, body.parallel_tool_calls !== false);
+      const historyMessages = formatToolHistory(Array.isArray(body.messages) ? body.messages : []);
+      const { content: rawContent, images } = extractContent(historyMessages as any);
+      const content = toolPrompt ? `${toolPrompt}\n\n${rawContent}` : rawContent;
       const isVideoModel = Boolean(cfg.is_video_model);
       const imgInputs = isVideoModel && images.length > 1 ? images.slice(0, 1) : images;
 
@@ -1304,6 +1312,7 @@ openAiRoutes.post("/chat/completions", async (c) => {
             global: settingsBundle.global,
             origin,
             requestedModel,
+            tools: toolDefinitions,
             onFinish: async ({ status, duration }) => {
               await addRequestLog(c.env.DB, {
                 ip,
@@ -1335,6 +1344,7 @@ openAiRoutes.post("/chat/completions", async (c) => {
           global: settingsBundle.global,
           origin,
           requestedModel,
+          tools: toolDefinitions,
         });
 
         const duration = (Date.now() - start) / 1000;

@@ -11,6 +11,9 @@ export interface OpenAIChatRequestBody {
   model: string;
   messages: OpenAIChatMessage[];
   stream?: boolean;
+  tools?: unknown[];
+  tool_choice?: unknown;
+  parallel_tool_calls?: boolean;
   video_config?: {
     aspect_ratio?: string;
     video_length?: number;

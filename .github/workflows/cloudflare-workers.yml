@@ -40,6 +40,10 @@ jobs:
         working-directory: worker
         run: npm run typecheck
 
+      - name: Check upstream drift
+        working-directory: worker
+        run: npm run check:upstream-drift
+
       - name: Validate A secrets
         run: |
           test -n "$CLOUDFLARE_API_TOKEN" || (echo "Missing CLOUDFLARE_API_TOKEN_A" && exit 1)
@@ -193,6 +197,10 @@ jobs:
       - name: Typecheck
         working-directory: worker
         run: npm run typecheck
+
+      - name: Check upstream drift
+        working-directory: worker
+        run: npm run check:upstream-drift
 
       - name: Validate B secrets
         run: |
