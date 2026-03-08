@@ -1,0 +1,118 @@
+name: Sync upstream and preserve fork overlay
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '17 3 * * *'
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  sync-upstream:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout fork main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Capture fork overlay from current main
+        run: |
+          set -e
+          mkdir -p .sync-overlay
+          while IFS= read -r path; do
+            [ -n "$path" ] || continue
+            [ -e "$path" ] || continue
+            mkdir -p ".sync-overlay/$(dirname "$path")"
+            cp -a "$path" ".sync-overlay/$path"
+          done < .github/fork-overlay.paths
+
+      - name: Add upstream remote
+        run: |
+          git remote add upstream https://github.com/chenyme/grok2api.git || true
+          git fetch upstream main --prune
+
+      - name: Create sync branch from upstream/main
+        run: |
+          set -e
+          BRANCH="sync/upstream-$(date +%Y%m%d-%H%M%S)"
+          echo "SYNC_BRANCH=$BRANCH" >> "$GITHUB_ENV"
+          git checkout -B "$BRANCH" upstream/main
+
+      - name: Re-apply fork overlay
+        run: |
+          set -e
+          while IFS= read -r path; do
+            [ -n "$path" ] || continue
+            [ -e ".sync-overlay/$path" ] || continue
+            mkdir -p "$(dirname "$path")"
+            rm -rf "$path"
+            cp -a ".sync-overlay/$path" "$path"
+          done < .github/fork-overlay.paths
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install worker dependencies
+        working-directory: worker
+        run: npm install --no-audit --no-fund
+
+      - name: Typecheck worker
+        working-directory: worker
+        run: npm run typecheck
+
+      - name: Check upstream drift
+        working-directory: worker
+        run: npm run check:upstream-drift
+
+      - name: Detect changes
+        id: changes
+        run: |
+          if git diff --quiet; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Commit changes
+        if: steps.changes.outputs.changed == 'true'
+        run: |
+          git add -A
+          git commit -m "chore: sync upstream and preserve fork overlay"
+
+      - name: Push sync branch
+        if: steps.changes.outputs.changed == 'true'
+        run: |
+          git push origin "$SYNC_BRANCH"
+
+      - name: Create pull request
+        if: steps.changes.outputs.changed == 'true'
+        uses: peter-evans/create-pull-request@v7
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          branch: ${{ env.SYNC_BRANCH }}
+          base: main
+          title: "chore: sync upstream and preserve fork overlay"
+          body: |
+            Automated upstream sync.
+
+            Preserved fork overlay paths from `.github/fork-overlay.paths`, then ran:
+            - `npm run typecheck`
+            - `npm run check:upstream-drift`
+
+            Review this PR before merge.
+          delete-branch: true
+
+      - name: No changes
+        if: steps.changes.outputs.changed != 'true'
+        run: echo "Upstream already in sync; nothing to do."
