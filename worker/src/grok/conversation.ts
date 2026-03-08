@@ -4,7 +4,17 @@ import { getModelInfo, toGrokModel } from "./models";
 
 export interface OpenAIChatMessage {
   role: string;
-  content: string | Array<{ type: string; text?: string; image_url?: { url?: string } }>;
+  content:
+    | string
+    | null
+    | { type?: string; text?: string; image_url?: { url?: string }; input_audio?: { data?: string }; file?: { file_data?: string } }
+    | Array<{
+        type?: string;
+        text?: string;
+        image_url?: { url?: string };
+        input_audio?: { data?: string };
+        file?: { file_data?: string };
+      }>;
 }
 
 export interface OpenAIChatRequestBody {
@@ -26,26 +36,47 @@ export const CONVERSATION_API = "https://grok.com/rest/app-chat/conversations/ne
 
 export function extractContent(messages: OpenAIChatMessage[]): { content: string; images: string[] } {
   const images: string[] = [];
+  const files: string[] = [];
   const extracted: Array<{ role: string; text: string }> = [];
 
   for (const msg of messages) {
     const role = msg.role ?? "user";
-    const content = msg.content ?? "";
+    const content = msg.content;
 
+    if (content == null) {
+      if (role === "assistant") continue;
+      throw new Error("Message content cannot be null");
+    }
+
+    const normalized = Array.isArray(content) ? content : typeof content === "object" ? [content] : content;
     const parts: string[] = [];
-    if (Array.isArray(content)) {
-      for (const item of content) {
-        if (item?.type === "text") {
-          const t = item.text ?? "";
-          if (t.trim()) parts.push(t);
+
+    if (Array.isArray(normalized)) {
+      for (const item of normalized) {
+        const itemType = item?.type ?? "text";
+        if (itemType === "text" || itemType === "input_text" || itemType === "output_text") {
+          const t = item?.text ?? "";
+          if (String(t).trim()) parts.push(String(t));
+          continue;
         }
-        if (item?.type === "image_url") {
-          const url = item.image_url?.url;
+        if (itemType === "image_url" || itemType === "input_image" || itemType === "image") {
+          const url = item?.image_url?.url;
           if (url) images.push(url);
+          continue;
+        }
+        if (itemType === "input_audio") {
+          const data = item?.input_audio?.data;
+          if (data) files.push(data);
+          continue;
+        }
+        if (itemType === "file") {
+          const data = item?.file?.file_data;
+          if (data) files.push(data);
+          continue;
         }
       }
     } else {
-      const t = String(content);
+      const t = String(normalized);
       if (t.trim()) parts.push(t);
     }
 
@@ -68,7 +99,12 @@ export function extractContent(messages: OpenAIChatMessage[]): { content: string
     else out.push(`${role}: ${text}`);
   }
 
-  return { content: out.join("\n\n"), images };
+  let combined = out.join("\n\n");
+  if (!combined.trim() && (images.length || files.length)) {
+    combined = "Refer to the following content:";
+  }
+
+  return { content: combined, images };
 }
 
 export function buildConversationPayload(args: {
@@ -94,8 +130,10 @@ export function buildConversationPayload(args: {
 
     const aspectRatio = (args.videoConfig?.aspect_ratio ?? "").trim() || "3:2";
     const videoLengthRaw = Number(args.videoConfig?.video_length ?? 6);
-    const videoLength = Number.isFinite(videoLengthRaw) ? Math.max(1, Math.floor(videoLengthRaw)) : 6;
-    const resolution = (args.videoConfig?.resolution ?? "SD") === "HD" ? "HD" : "SD";
+    const videoLengthBase = Number.isFinite(videoLengthRaw) ? Math.floor(videoLengthRaw) : 6;
+    const videoLength = Math.min(30, Math.max(6, videoLengthBase));
+    const resolutionInput = String(args.videoConfig?.resolution ?? "540p").trim().toLowerCase();
+    const resolution = ["720p", "hd"].includes(resolutionInput) ? "720p" : "540p";
     const preset = (args.videoConfig?.preset ?? "normal").trim();
 
     let modeFlag = "--mode=custom";

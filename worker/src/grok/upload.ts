@@ -47,7 +47,7 @@ export async function uploadImage(
     if (!mime.startsWith("image/")) mime = MIME_DEFAULT;
     base64 = arrayBufferToBase64(await r.arrayBuffer());
     filename = `image.${guessExtFromMime(mime)}`;
-  } else if (imageInput.trim().startsWith("data:image")) {
+  } else if (imageInput.trim().startsWith("data:")) {
     const parsed = parseDataUrl(imageInput);
     base64 = parsed.base64;
     mime = parsed.mime;

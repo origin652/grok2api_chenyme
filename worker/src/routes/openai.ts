@@ -1209,6 +1209,12 @@ openAiRoutes.post("/chat/completions", async (c) => {
         resolution?: string;
         preset?: string;
       };
+      video?: {
+        aspect_ratio?: string;
+        duration?: number;
+        resolution?: string;
+        preset?: string;
+      };
     };
 
     requestedModel = String(body.model ?? "");
@@ -1258,6 +1264,14 @@ openAiRoutes.post("/chat/completions", async (c) => {
       const content = toolPrompt ? `${toolPrompt}\n\n${rawContent}` : rawContent;
       const isVideoModel = Boolean(cfg.is_video_model);
       const imgInputs = isVideoModel && images.length > 1 ? images.slice(0, 1) : images;
+      const normalizedVideoConfig = body.video_config ?? (body.video
+        ? {
+            ...(body.video.aspect_ratio ? { aspect_ratio: body.video.aspect_ratio } : {}),
+            ...(typeof body.video.duration === 'number' ? { video_length: body.video.duration } : {}),
+            ...(body.video.resolution ? { resolution: body.video.resolution } : {}),
+            ...(body.video.preset ? { preset: body.video.preset } : {}),
+          }
+        : undefined);
 
       try {
         const uploads = await mapLimit(imgInputs, 5, (u) => uploadImage(u, cookie, settingsBundle.grok));
@@ -1285,7 +1299,7 @@ openAiRoutes.post("/chat/completions", async (c) => {
           imgIds,
           imgUris,
           ...(postId ? { postId } : {}),
-          ...(isVideoModel && body.video_config ? { videoConfig: body.video_config } : {}),
+          ...(isVideoModel && normalizedVideoConfig ? { videoConfig: normalizedVideoConfig } : {}),
           settings: settingsBundle.grok,
         });
 

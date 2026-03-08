@@ -6,6 +6,7 @@ const py = fs.readFileSync(new URL('app/services/grok/services/model.py', repoRo
 const ts = fs.readFileSync(new URL('worker/src/grok/models.ts', repoRoot), 'utf8');
 const openaiRoute = fs.readFileSync(new URL('worker/src/routes/openai.ts', repoRoot), 'utf8');
 const processor = fs.readFileSync(new URL('worker/src/grok/processor.ts', repoRoot), 'utf8');
+const conversation = fs.readFileSync(new URL('worker/src/grok/conversation.ts', repoRoot), 'utf8');
 
 const pyIds = [...py.matchAll(/model_id="([^"]+)"/g)].map((m) => m[1]);
 const tsIds = [...ts.matchAll(/^\s*"([^"]+)":\s*\{/gm)].map((m) => m[1]);
@@ -18,11 +19,16 @@ if (onlyInPy.length || onlyInTs.length) {
   errors.push(`Model drift detected. onlyInPy=${JSON.stringify(onlyInPy)} onlyInTs=${JSON.stringify(onlyInTs)}`);
 }
 
-for (const needle of ['tool_choice', 'parallel_tool_calls', 'tools?: OpenAIToolDefinition[]']) {
-  if (!openaiRoute.includes(needle)) errors.push(`Missing tool-call route support marker: ${needle}`);
+for (const needle of ['tool_choice', 'parallel_tool_calls', 'tools?: OpenAIToolDefinition[]', 'normalizedVideoConfig = body.video_config ?? (body.video']) {
+  if (!openaiRoute.includes(needle)) errors.push(`Missing route support marker: ${needle}`);
 }
 for (const needle of ['parseToolCalls', 'tool_calls', 'finish_reason: hasToolCalls ? "tool_calls" : "stop"']) {
   if (!processor.includes(needle)) errors.push(`Missing tool-call processor marker: ${needle}`);
+}
+for (const needle of ['content == null', 'Refer to the following content:', 'Math.min(30, Math.max(6, videoLengthBase))', 'resolutionInput']) {
+  if (!ts.includes(needle) && !openaiRoute.includes(needle) && !conversation.includes(needle)) {
+    errors.push(`Missing worker compatibility marker: ${needle}`);
+  }
 }
 
 if (errors.length) {
